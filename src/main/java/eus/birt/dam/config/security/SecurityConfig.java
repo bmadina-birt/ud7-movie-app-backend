@@ -1,52 +1,79 @@
 package eus.birt.dam.config.security;
 
-
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.*;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.*;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 
+import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter, HandlerMappingIntrospector introspector) throws Exception {
+    @Autowired
+    private Environment environment;
 
-        // Configuramos los endpoints públicos y privados
-        http
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**", "/api/usuarios/registro", "/api/diagnostic", "/health",  "/api/peliculas/**").permitAll()
-                // Configuración condicional de H2 Console
-                .requestMatchers(PathRequest.toH2Console())
-                    .permitAll()
-                .anyRequest().authenticated()
-            )
-            .csrf(csrf -> csrf
-                // Configuración condicional de H2 Console
-                .ignoringRequestMatchers(PathRequest.toH2Console())
-                .disable()
-            );
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter) throws Exception {
+        // Verifica si estamos en producción (Railway)
+        boolean isProd = Arrays.asList(environment.getActiveProfiles()).contains("prod");
         
-        // Configuración condicional de H2 Console
-        try {
-            http.headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin));
-        } catch (Exception e) {
-            // Si H2 Console no está disponible, simplemente ignoramos esta configuración
-            System.out.println("H2 Console no está disponible en este entorno.");
+        // Configurar endpoints públicos y privados
+        http
+            .authorizeHttpRequests(auth -> {
+                // Endpoints públicos (login, registro, health check)
+                auth.requestMatchers("/auth/**", "/api/usuarios/registro", "/health").permitAll();
+                auth.requestMatchers("/api/diagnostic").permitAll();
+                
+                // Las películas requieren autenticación (restaurando comportamiento original)
+                auth.requestMatchers("/api/peliculas/**").authenticated();
+                
+                // Si no estamos en producción, permitir H2 Console
+                if (!isProd) {
+                    auth.requestMatchers(request -> {
+                        try {
+                            return PathRequest.toH2Console().matches(request);
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }).permitAll();
+                }
+                
+                // Todo lo demás requiere autenticación
+                auth.anyRequest().authenticated();
+            })
+            // Deshabilitar CSRF para APIs REST
+            .csrf(csrf -> csrf.disable())
+            
+            // Usar modo STATELESS para APIs REST
+            .sessionManagement(session -> 
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            );
+            
+        // Configuración de frameOptions solo para entornos no-prod
+        if (!isProd) {
+            try {
+                http.headers(headers -> 
+                    headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)
+                );
+            } catch (Exception e) {
+                System.out.println("No se pudo configurar frameOptions: " + e.getMessage());
+            }
         }
 
-        // Añadir filtro JWT
+        // Añadir filtro JWT mejorado
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
