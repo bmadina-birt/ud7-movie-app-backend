@@ -26,7 +26,7 @@ public class SecurityConfig {
         // Configuramos los endpoints públicos y privados
         http
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**", "/api/usuarios/registro", "/api/diagnostic", "/health").permitAll()
+                .requestMatchers("/auth/**", "/api/usuarios/registro", "/api/diagnostic", "/health",  "/api/peliculas/**").permitAll()
                 // Configuración condicional de H2 Console
                 .requestMatchers(PathRequest.toH2Console())
                     .permitAll()
