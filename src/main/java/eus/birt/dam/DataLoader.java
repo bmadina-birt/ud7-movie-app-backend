@@ -6,13 +6,13 @@ import eus.birt.dam.service.OmdbService;
 import eus.birt.dam.service.PeliculaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Profile;
+//import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
-@Profile("!prod")  // No se ejecutará en producción
+//@Profile("!prod")  // No se ejecutará en producción
 public class DataLoader implements CommandLineRunner {
 
     @Autowired
